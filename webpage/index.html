@@ -7,9 +7,9 @@
                 socket.onopen = () =>  { 
                     console.log("Socket Opened")
                     setInterval(_ => {
-                        console.log("Sending Message...")
-                        socket.send("Hello rust!", 3000)
-                    })
+                        console.log("hey")
+                        socket.send("Hello rust!") 
+                    }, 3000)
                 }
                 socket.onmessage = (msg) => alert(msg.data)
                 socket.onerror = (err) => console.error(err)

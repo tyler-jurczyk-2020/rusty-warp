@@ -18,27 +18,34 @@ async fn main() {
     let python = warp::path!("python")
         .and(warp::post())
         .and(warp::body::bytes())
-        .and(stuff)
+        .and(stuff.clone())
         .and_then(handle_python);
     let websocket = warp::path!("ws")
         .and(warp::ws())
-        .map(|ws : warp::ws::Ws| {
-            ws.on_upgrade(handle_websocket)
+        .and(stuff)
+        .map(|ws : warp::ws::Ws, data| {
+            ws.on_upgrade(move |ws| handle_websocket(ws, data))
         });
     warp::serve(filter.or(python).or(websocket)).run(socket).await; 
 }
 
-async fn handle_websocket(ws : warp::ws::WebSocket) {
+async fn handle_websocket(ws : warp::ws::WebSocket, data : Arc<Mutex<Vec<u8>>>) {
     let (mut sender, mut receiver) = ws.split();
-    
+     
     while let Some(r) = receiver.next().await {
-        sender.send(Message::text("Hi there")).await;
+        let mail;
+        {
+            let b = data.lock().unwrap();
+            mail = sender.send(Message::text(String::from_utf8(b.to_vec()).unwrap()));
+        }
+        mail.await;
     }
 }
 
 async fn handle_python(body : Bytes, data : Arc<Mutex<Vec<u8>>>) -> Result<impl Reply, warp::Rejection> {
     let body_vec : Vec<u8> = body.to_vec();
     let mut b = data.lock().unwrap();
+    b.clear();
     b.extend_from_slice(&body.to_vec());
     println!("{:?}", String::from_utf8(b.to_vec()));
     Ok(warp::reply::html(""))
