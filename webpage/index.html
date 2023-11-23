@@ -6,7 +6,10 @@
                 const socket = new WebSocket("ws://127.0.0.1:7878/ws")
                 socket.onopen = () =>  { 
                     console.log("Socket Opened")
-                    setInterval(_ => socket.send("Hello rust!"), 3000)
+                    setInterval(_ => {
+                        console.log("Sending Message...")
+                        socket.send("Hello rust!", 3000)
+                    })
                 }
                 socket.onmessage = (msg) => alert(msg.data)
                 socket.onerror = (err) => console.error(err)
