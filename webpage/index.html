@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+    <body>
+        <script>
+            window.onload = () => {
+                const socket = new WebSocket("ws://127.0.0.1:7878/ws")
+                socket.onopen = () =>  { 
+                    console.log("Socket Opened")
+                    setInterval(_ => {
+                        console.log("hey")
+                        socket.send("Hello rust!") 
+                    }, 3000)
+                }
+                socket.onmessage = (msg) => alert(msg.data)
+                socket.onerror = (err) => console.error(err)
+                socket.onclose = () => console.log("Socket Closed")
+            }
+        </script>
+    </body>
+</html>
