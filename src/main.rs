@@ -46,7 +46,7 @@ async fn main() {
     let images = warp::path("images")
         .and(warp::path("players"))
         .and(warp::fs::dir(path));
-    warp::serve(python_filter.or(browser_filter).or(images)).run(socket).await; 
+    warp::serve(main_filter.or(python_filter).or(browser_filter).or(images)).run(socket).await; 
 }
 
 async fn handle_python_websocket(ws : warp::ws::WebSocket, data : Arc<Mutex<Data>>, clientele : Arc<Mutex<HashMap<u32, Client>>>) {
@@ -137,7 +137,7 @@ fn setup_browser_ws(data : Arc<Mutex<Data>>, clientele : Arc<Mutex<HashMap<u32, 
         .and(data_filter)
         .and(clientele_filter)
         .map(|ws : warp::ws::Ws, d, c| {
-            ws.on_upgrade(move |ws| handle_python_websocket(ws, d, c))
+            ws.on_upgrade(move |ws| handle_browser_websocket(ws, d, c))
         });
     filter
 }

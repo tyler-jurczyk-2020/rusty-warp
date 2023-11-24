@@ -1,5 +1,5 @@
  window.onload = () => {
-                const socket = new WebSocket("ws://127.0.0.1:7878/ws")
+                const socket = new WebSocket("ws://127.0.0.1:7878/browser-ws")
                 socket.onopen = () =>  { 
                     console.log("Socket Opened")
                 }
