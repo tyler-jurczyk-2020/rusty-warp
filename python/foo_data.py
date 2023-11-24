@@ -1,17 +1,11 @@
-import requests
 import time
-import numpy as np
+#import numpy as np
 
-url = "http://127.0.0.1:7878/python"
+from websockets.sync.client import connect
 
-session = requests.Session()
+url = "ws://127.0.0.1:7878/python-ws"
 
-response = session.get(url)
-print(response.text)
-
-while(True):
-    data = np.random.normal(0, 1, 20);
-    print(data)
-    json = {"play": data.tolist()}
-    session.post(url, json=json)
-    time.sleep(5)
+with connect("ws://127.0.0.1:7878/python-ws") as websocket:
+        websocket.send("Hello world!")
+        message = websocket.recv()
+        print(f"Received: {message}")
