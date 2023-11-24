@@ -3,9 +3,9 @@ use warp::{Filter, filters::{ws::{Message, Ws, WebSocket}, body}, reply::Reply};
 use futures::{StreamExt, FutureExt, SinkExt, TryFutureExt, Future};
 use warp::hyper::body::Bytes;
 use tokio::sync::watch;
-use serde::Deserialize;
+use serde::{Serialize, Deserialize};
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct Data {
     play : Vec<f64>
 }
@@ -55,10 +55,11 @@ async fn handle_websocket(ws : warp::ws::WebSocket, data : Arc<Mutex<Data>>, mut
         let mut stream;
         {
             let b = data.lock().unwrap();
-            stream = futures::stream::iter(b.play.clone().into_iter().map(|v|Ok(Message::text(v.to_string()))));
+            //stream = futures::stream::iter(b.play.clone().into_iter().map(|v|Ok(Message::text(v.to_string()))));
+            stream = serde_json::to_string(&*b).unwrap();
         }
-        sender.send_all(&mut stream).await.unwrap();
-        //sender.send(Message::text("alrighy")).await;
+        //sender.send_all(&mut stream).await.unwrap();
+        sender.send(Message::text(stream)).await;
     }
 }
 
