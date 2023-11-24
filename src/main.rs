@@ -44,7 +44,15 @@ async fn main() {
         .map(|ws : warp::ws::Ws, data, listener| {
             ws.on_upgrade(move |ws| handle_websocket(ws, data, listener))
         });
-    warp::serve(filter.or(python).or(websocket)).run(socket).await; 
+    let mut path = PathBuf::new();
+    let current_dir = std::env::current_dir().unwrap().to_string_lossy().to_string();
+    path.push(&current_dir);
+    path.push("images");
+    path.push("players");
+    let images = warp::path("images")
+        .and(warp::path("players"))
+        .and(warp::fs::dir(path));
+    warp::serve(filter.or(images).or(python).or(websocket)).run(socket).await; 
 }
 
 async fn handle_websocket(ws : warp::ws::WebSocket, data : Arc<Mutex<Data>>, mut listener : watch::Receiver<&str>) {

@@ -1,20 +1,12 @@
 <!DOCTYPE html>
-<html>
-    <body>
-        <script>
-            window.onload = () => {
-                const socket = new WebSocket("ws://127.0.0.1:7878/ws")
-                socket.onopen = () =>  { 
-                    console.log("Socket Opened")
-                    setInterval(_ => {
-                        console.log("hey")
-                        socket.send("Hello rust!") 
-                    }, 3000)
-                }
-                socket.onmessage = (msg) => console.log(msg)
-                socket.onerror = (err) => console.error(err)
-                socket.onclose = () => console.log("Socket Closed")
-            }
-        </script>
-    </body>
+<html class="backdrop">
+<head><link rel="stylesheet" type="text/css" href="styles.css"></head>
+<div class="backdrop">
+    <div class="player-box">
+        <img src="/images/players/a1.png" class="player-size"></img>
+        <img src="/images/players/a6.png" class="player-size"></img>
+    </div>
+    <div class="text" id="p1">Placholder text</div>
+</div>
+<script src=client.js></script>
 </html>
