@@ -10,6 +10,8 @@ response = session.get(url)
 print(response.text)
 
 while(True):
-    data = np.random.normal(0, 1);
-    session.post(url, data=f'{data}')
+    data = np.random.normal(0, 1, 20);
+    print(data)
+    json = {"play": data.tolist()}
+    session.post(url, json=json)
     time.sleep(5)

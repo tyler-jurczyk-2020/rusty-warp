@@ -3,6 +3,18 @@ use warp::{Filter, filters::{ws::{Message, Ws, WebSocket}, body}, reply::Reply};
 use futures::{StreamExt, FutureExt, SinkExt, TryFutureExt, Future};
 use warp::hyper::body::Bytes;
 use tokio::sync::watch;
+use serde::Deserialize;
+
+#[derive(Debug, Deserialize)]
+struct Data {
+    play : Vec<f64>
+}
+
+impl Data {
+    fn new() -> Data {
+        Data {play : Vec::new()}
+    }
+}
 
 #[tokio::main]
 async fn main() {
@@ -11,8 +23,7 @@ async fn main() {
     let current_dir = std::env::current_dir().unwrap().to_string_lossy().to_string();
     path.push(&current_dir);
     path.push("webpage");
-    println!("{path:?}");
-    let data : Arc<Mutex<Vec<u8>>> = Arc::new(Mutex::new(Vec::new()));
+    let data : Arc<Mutex<Data>> = Arc::new(Mutex::new(Data::new()));
     let stuff = warp::any().map(move || data.clone());
     let (tx, mut rx) = watch::channel("New data from python");
     let single = Arc::new(tx); 
@@ -22,7 +33,7 @@ async fn main() {
         .and(warp::fs::dir(path));
     let python = warp::path!("python")
         .and(warp::post())
-        .and(warp::body::bytes())
+        .and(warp::body::json())
         .and(stuff.clone())
         .and(python_broadcast)
         .and_then(handle_python);
@@ -36,25 +47,30 @@ async fn main() {
     warp::serve(filter.or(python).or(websocket)).run(socket).await; 
 }
 
-async fn handle_websocket(ws : warp::ws::WebSocket, data : Arc<Mutex<Vec<u8>>>, mut listener : watch::Receiver<&str>) {
+async fn handle_websocket(ws : warp::ws::WebSocket, data : Arc<Mutex<Data>>, mut listener : watch::Receiver<&str>) {
     let (mut sender, mut receiver) = ws.split();
     loop {
-        listener.changed().await;
-        let mail;
+        listener.changed().await.unwrap();
+        println!("Websocket waking up");
+        let mut stream;
         {
             let b = data.lock().unwrap();
-            mail = sender.send(Message::text(String::from_utf8(b.to_vec()).unwrap()));
+            stream = futures::stream::iter(b.play.clone().into_iter().map(|v|Ok(Message::text(v.to_string()))));
         }
-        mail.await;
+        sender.send_all(&mut stream).await.unwrap();
+        //sender.send(Message::text("alrighy")).await;
     }
 }
 
-async fn handle_python(body : Bytes, data : Arc<Mutex<Vec<u8>>>, sender : Arc<watch::Sender<&str>>) -> Result<impl Reply, warp::Rejection> {
-    let body_vec : Vec<u8> = body.to_vec();
+async fn handle_python(body : serde_json::Value, data : Arc<Mutex<Data>>, sender : Arc<watch::Sender<&str>>) -> Result<impl Reply, warp::Rejection> {
+    let incoming_data = match serde_json::from_value::<Data>(body.clone()) {
+        Ok(v) => v,
+        Err(e) => panic!("Failed to load python data: {}", e) 
+    };
     let mut b = data.lock().unwrap();
-    b.clear();
-    b.extend_from_slice(&body.to_vec());
-    println!("{:?}", String::from_utf8(b.to_vec()));
+    b.play.clear();
+    b.play.extend_from_slice(&incoming_data.play);
+    println!("Signaling websocket");
     sender.send("bre");
     Ok(warp::reply::html(""))
 }
