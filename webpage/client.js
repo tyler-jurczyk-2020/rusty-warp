@@ -5,8 +5,9 @@
                 }
                 socket.onmessage = (msg) => {
                     let data = JSON.parse(msg.data)
-                    document.getElementById("p1").textContent = data.play[0]
-                    document.getElementById("p2").textContent = data.play[1]
+                    console.log(data)
+                    document.getElementById("p1").textContent = data[0]
+                    document.getElementById("p2").textContent = data[1]
                 } 
                 socket.onerror = (err) => console.error(err)
                 socket.onclose = () => console.log("Socket Closed")
