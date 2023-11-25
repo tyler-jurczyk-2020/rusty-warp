@@ -41,7 +41,7 @@ impl Data {
             batch_size : 20,
             display1 : 0.0,
             display2 : 0.0,
-            players : vec![Player::new(1.0, 0.1), Player::new(0.5, 0.1)]
+            players : vec![Player::new(0.0, 0.1), Player::new(0.0, 0.1)]
         }
     }
 }
@@ -106,7 +106,8 @@ async fn handle_python_websocket(ws : warp::ws::WebSocket, data : Arc<Mutex<Data
             println!("{:?}", dh.batch);
             }
             println!("Match starting soon...");
-            tokio::time::sleep(Duration::new(3, 0)); 
+            tokio::time::sleep(Duration::new(5, 0)).await; 
+            println!("Match starting now!");
             run_match(&watch_tx, data.clone()).await;
         }
     });
@@ -137,10 +138,11 @@ async fn handle_browser_websocket(ws : warp::ws::WebSocket, data : Arc<Mutex<Dat
         loop {
            if let Ok(v) = python_reciever.changed().await {
                 // We have some new data to process
-                let data_to_send : (f64, f64);
+                let val = python_reciever.borrow_and_update().clone();
+                let data_to_send : (f64, f64, usize);
                 {
                     let d = data.lock().unwrap();
-                    data_to_send = (d.display1, d.display2);
+                    data_to_send = (d.display1, d.display2, val);
                 }
                 sender.send(Message::text(serde_json::to_string(&data_to_send).unwrap())).await;
             }
