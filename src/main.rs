@@ -1,18 +1,22 @@
 use std::{net::SocketAddr, path::PathBuf, collections::HashMap, cell::RefCell, convert::Infallible, sync::{Arc, Mutex}, task::Poll};
+use data::Batch;
 use warp::{Filter, filters::{ws::{Message, Ws, WebSocket}, body}, reply::Reply, reject::Rejection};
 use futures::{StreamExt, FutureExt, SinkExt, TryFutureExt, Future, future::Map};
 use warp::hyper::body::Bytes;
-use tokio::sync::mpsc::{self, UnboundedSender, UnboundedReceiver};
+use tokio::{sync::mpsc::{self, UnboundedSender, UnboundedReceiver}, stream};
 use serde::{Serialize, Deserialize};
+
+mod data;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Data {
-    play : Vec<f64>
+    batch : Batch,
+    player_count : usize    
 }
 
 impl Data {
     fn new() -> Data {
-        Data {play : Vec::new()}
+        Data {batch : Batch::new(), player_count : 2}
     }
 }
 
@@ -21,6 +25,8 @@ enum Client {
     Javascript(UnboundedSender<()>),
     Python(UnboundedSender<()>)
 }
+
+const GENERATE : &str = "A3A3";
 
 #[tokio::main]
 async fn main() {
@@ -51,35 +57,28 @@ async fn main() {
 
 async fn handle_python_websocket(ws : warp::ws::WebSocket, data : Arc<Mutex<Data>>, clientele : Arc<Mutex<HashMap<u32, Client>>>) {
     let (mut sender, mut receiver) = ws.split();
-    // We are going to assume for now that python instance comes before anything else
-    // Python is hardcoded to 0 and Browser is hardcoded to 1 for now as well
     let (tx, mut rx) = mpsc::unbounded_channel::<()>();
-    {
-        let mut c = clientele.lock().unwrap();  
-        c.insert(0, Client::Python(tx));
-    }
-    println!("Waiting for first contact");
-    rx.recv().await;
-    println!("Recieved initial contact!");
-    let br_tx;
-    {
-        let mut c = clientele.lock().unwrap();  
-        br_tx = c.remove(&1).unwrap();
-    }
-    // Sending message to python ws when receiving internal message from browser thread
+
+    println!("Creating Main Thread");
+    // Create main thread that manages state
     tokio::spawn(async move {
-        while let Some(_r) = rx.recv().await {
-            sender.send(Message::text("Python says hi!")); 
+        let stream_send;
+        let data_handle = data.clone();
+        {
+        let data_hold = data_handle.lock().unwrap();
+        let mut stream_pre : Vec<Message> = Vec::new();
+        stream_pre.push(Message::text(GENERATE));
+        stream_pre.push(Message::text(serde_json::to_string(&data_hold.player_count).unwrap()));
+        // Preflight message
+        stream_send = futures::stream::iter(stream_pre);
         }
-    });
-    // Sending interal message to browser thread when receiving python ws event
-    tokio::spawn(async move {
-       while let Some(_r) = receiver.next().await {
-            if let Client::Javascript(ref s) = br_tx {
-                println!("Got signal from browser");
-                s.send(());
-            } 
-       } 
+        sender.send_all(&mut stream_send.map(|v|Ok(v))).await;
+        if let Some(m) = receiver.next().await {
+            println!("{m:?}");
+            let mut dh = data_handle.lock().unwrap();
+            dh.batch = serde_json::from_str(m.unwrap().to_str().unwrap()).unwrap();
+            println!("{:?}", dh.batch);
+        }
     });
     // Check result of tokio spawns and disconnect properly
 }
