@@ -15,13 +15,34 @@ mod events;
 pub struct Data {
     batch : Batch,
     player_count : usize,    
+    batch_size : usize,
+    players : Vec<Player>,
     display1 : f64,
     display2 : f64 
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct Player {
+    mean : f64,
+    std_dev : f64
+}
+
+impl Player {
+    fn new(mean : f64, std_dev : f64) -> Player {
+        Player { mean, std_dev }
+    }
+}
+
 impl Data {
     fn new() -> Data {
-        Data {batch : Batch::new(), player_count : 2, display1 : 0.0, display2 : 0.0}
+        Data { 
+            batch : Batch::new(),
+            player_count : 2,
+            batch_size : 20,
+            display1 : 0.0,
+            display2 : 0.0,
+            players : vec![Player::new(1.0, 0.1), Player::new(0.5, 0.1)]
+        }
     }
 }
 
@@ -71,7 +92,8 @@ async fn handle_python_websocket(ws : warp::ws::WebSocket, data : Arc<Mutex<Data
             let data_hold = data_handle.lock().unwrap();
             let mut stream_pre : Vec<Message> = Vec::new();
             stream_pre.push(Message::text(GENERATE));
-            stream_pre.push(Message::text(serde_json::to_string(&data_hold.player_count).unwrap()));
+            let player_data = (data_hold.player_count, data_hold.batch_size, &data_hold.players);
+            stream_pre.push(Message::text(serde_json::to_string(&player_data).unwrap()));
             // Preflight message
             stream_send = futures::stream::iter(stream_pre);
         }

@@ -4,10 +4,12 @@ import json
 
 def generate_game(ws):
     print("generating data")
-    iter = ws.recv()
-    batch = np.empty((2,10))
-    for i in range(int(iter)):
-        batch[i] = np.random.normal(0, 1, 10)
+    recv = ws.recv()
+    obj = json.loads(recv)
+    print(obj)
+    batch = np.empty((obj[0],obj[1]))
+    for i in range(obj[0]):
+        batch[i] = np.random.normal(obj[2][i]["mean"], obj[2][i]["std_dev"], obj[1])
     print(batch)
     json_form = { 
             "play_action" : batch.tolist()
