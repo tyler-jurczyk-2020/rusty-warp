@@ -10,7 +10,7 @@ function App() {
     filename = "1";
     return (
     <div> 
-        <img src='a1.png'/>
+        <img src='players/a1.png'/>
     </div>
     )
 }

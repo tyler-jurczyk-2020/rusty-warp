@@ -47,9 +47,9 @@ pub async fn handle_python_websocket(ws : warp::ws::WebSocket, data : Arc<Mutex<
     let mut c = comms.lock().unwrap();
     c.recv_from_py = Some(watch_rx); 
     c.send_to_py = Some(tx);
-
+    let cln = data.clone();
     tokio::spawn(async move {
-        browser_thread(rx).await 
+        browser_thread(cln, rx).await 
     });
     println!("Creating Main Thread");
     tokio::spawn(async move {
@@ -78,15 +78,18 @@ async fn main_thread(data : Arc<Mutex<Data>>, mut sender : SplitSink<WebSocket, 
             println!("{:?}", dh.batch);
             }
             println!("Match starting soon...");
+            //** Send data to browser to match **//
             tokio::time::sleep(Duration::new(5, 0)).await; 
             println!("Match starting now!");
             run_match(&watch_tx, data.clone()).await;
         }
 }
 
-async fn browser_thread(mut rx : UnboundedReceiver<()>) {
-    rx.recv().await;
-    println!("Browser has something for me!");
+async fn browser_thread(data : Arc<Mutex<Data>>, mut rx : UnboundedReceiver<()>) {
+    loop {
+        rx.recv().await;
+        println!("Browser has something for me!");
+    }
 }
 
 pub fn setup_python_ws(data : Arc<Mutex<Data>>, comms : Arc<Mutex<GlobalComms>>) ->  impl Filter<Extract = (impl Reply, ), Error = Rejection> + Clone {
