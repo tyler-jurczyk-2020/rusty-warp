@@ -3,42 +3,12 @@ use futures::{StreamExt, SinkExt, stream::{SplitSink, SplitStream}, Future};
 use tokio::sync::{watch::{Receiver, self, Sender}, mpsc::{self, UnboundedReceiver, UnboundedSender}};
 use warp::{filters::ws::{Message, WebSocket}, Filter, reject::Rejection, reply::Reply};
 
-use crate::{Data, GENERATE, events::run_match};
+use crate::{data::{GlobalComms, Data, ExternMessage, GENERATE}, events::run_match};
 
-pub struct GlobalComms {
-    pub send_to_py : Option<UnboundedSender<()>>,
-    pub recv_from_py : Option<Receiver<usize>>
-}
 
-impl GlobalComms {
-    pub fn new() -> GlobalComms {
-        GlobalComms { send_to_py : None, recv_from_py : None}
-    }
-}
 
-struct ClientMessage {
-    preflight : Message,
-    contents : Message
-}
 
-impl ClientMessage {
-    fn new(preflight : String, contents : impl serde::Serialize) -> ClientMessage{
-            let p = Message::text(preflight);
-            let c = Message::text(serde_json::to_string(&contents).unwrap());
-            ClientMessage{preflight : p, contents : c}    
-    }
-    async fn send_message(&self, sender : &mut SplitSink<WebSocket, Message> ) {
-        let mut stream_pre : Vec<Message> = Vec::new();
-        stream_pre.push(self.preflight.clone());
-        stream_pre.push(self.contents.clone());
-        // Preflight message
-        let stream_send = futures::stream::iter(stream_pre.clone());
-        sender.send_all(&mut stream_send.map(|v|Ok(v))).await;
-    }
-
-}
-
-pub async fn handle_python_websocket(ws : warp::ws::WebSocket, data : Arc<Mutex<Data>>, comms : Arc<Mutex<GlobalComms>>) {
+async fn handle_python_websocket(ws : warp::ws::WebSocket, data : Arc<Mutex<Data>>, comms : Arc<Mutex<GlobalComms>>) {
     let (mut sender, mut receiver) = ws.split();
     // Receives data from browser throught this channel
     let (tx, mut rx) = mpsc::unbounded_channel::<()>();
@@ -66,7 +36,7 @@ async fn main_thread(data : Arc<Mutex<Data>>, mut sender : SplitSink<WebSocket, 
         {
             let data_hold = data_handle.lock().unwrap();
             let data_to_ser = (data_hold.player_count, data_hold.batch_size, &data_hold.players);
-            request_data = ClientMessage::new(GENERATE.to_string(), data_to_ser);
+            request_data = ExternMessage::new(GENERATE.to_string(), data_to_ser);
         }
         request_data.send_message(&mut sender).await;
 
