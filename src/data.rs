@@ -20,13 +20,14 @@ impl Batch {
 }
 
 pub struct GlobalComms {
-    pub send_to_py : Option<UnboundedSender<()>>,
-    pub recv_from_py : Option<Receiver<usize>>
+    pub send_to_py : Option<UnboundedSender<InternMessage>>,
+    pub recv_from_py : Option<UnboundedReceiver<InternMessage>>,
+    pub send_to_brow : Option<UnboundedSender<InternMessage>>
 }
 
 impl GlobalComms {
     pub fn new() -> GlobalComms {
-        GlobalComms { send_to_py : None, recv_from_py : None}
+        GlobalComms { send_to_py : None, send_to_brow : None, recv_from_py : None}
     }
 }
 
@@ -102,4 +103,3 @@ impl Data {
 
 
 pub const GENERATE : &str = "A3A3";
-

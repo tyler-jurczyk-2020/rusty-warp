@@ -3,7 +3,7 @@ use futures::{StreamExt, SinkExt, stream::{SplitSink, SplitStream}, Future};
 use tokio::sync::{watch::{Receiver, self, Sender}, mpsc::{self, UnboundedReceiver, UnboundedSender}};
 use warp::{filters::ws::{Message, WebSocket}, Filter, reject::Rejection, reply::Reply};
 
-use crate::{data::{GlobalComms, Data, ExternMessage, GENERATE}, events::run_match};
+use crate::{data::{GlobalComms, Data, ExternMessage, GENERATE, InternMessage}, events::run_match, shared::{outgoing_thread, main_thread}};
 
 
 
@@ -11,56 +11,39 @@ use crate::{data::{GlobalComms, Data, ExternMessage, GENERATE}, events::run_matc
 async fn handle_python_websocket(ws : warp::ws::WebSocket, data : Arc<Mutex<Data>>, comms : Arc<Mutex<GlobalComms>>) {
     let (mut sender, mut receiver) = ws.split();
     // Receives data from browser throught this channel
-    let (tx, mut rx) = mpsc::unbounded_channel::<()>();
-    let (watch_tx, watch_rx) = watch::channel(0);
-    watch_tx.send(1);
+    let (tx, mut rx) = mpsc::unbounded_channel::<InternMessage>();
+    let (tx_brow, mut rx_brow) = mpsc::unbounded_channel::<InternMessage>();
     let mut c = comms.lock().unwrap();
-    c.recv_from_py = Some(watch_rx); 
-    c.send_to_py = Some(tx);
+    c.send_to_py = Some(tx.clone());
+    c.recv_from_py = Some(rx_brow);
+    c.send_to_brow = Some(tx_brow.clone());
     let cln = data.clone();
     tokio::spawn(async move {
-        browser_thread(cln, rx).await 
+        incoming_python_thread(receiver, tx, tx_brow).await;
     });
+
+    tokio::spawn(async move {
+        outgoing_thread(sender, rx).await;
+    }); 
+    
     println!("Creating Main Thread");
     tokio::spawn(async move {
-       main_thread(data, sender, receiver, watch_tx).await 
+       //main_thread(data, sender, receiver).await 
     });
     
     // Check result of tokio spawns and disconnect properly
 }
 
-async fn main_thread(data : Arc<Mutex<Data>>, mut sender : SplitSink<WebSocket, Message>, mut receiver : SplitStream<WebSocket>,
-                     watch_tx : Sender<usize>) {
-        let data_handle = data.clone();
-        let request_data;
-        {
-            let data_hold = data_handle.lock().unwrap();
-            let data_to_ser = (data_hold.player_count, data_hold.batch_size, &data_hold.players);
-            request_data = ExternMessage::new(GENERATE.to_string(), data_to_ser);
-        }
-        request_data.send_message(&mut sender).await;
-
-        if let Some(m) = receiver.next().await {
-            println!("{m:?}");
-            {
-            let mut dh = data_handle.lock().unwrap();
-            dh.batch = serde_json::from_str(m.unwrap().to_str().unwrap()).unwrap();
-            println!("{:?}", dh.batch);
-            }
-            println!("Match starting soon...");
-            //** Send data to browser to match **//
-            tokio::time::sleep(Duration::new(5, 0)).await; 
-            println!("Match starting now!");
-            run_match(&watch_tx, data.clone()).await;
-        }
-}
-
-async fn browser_thread(data : Arc<Mutex<Data>>, mut rx : UnboundedReceiver<()>) {
+async fn incoming_python_thread(mut receiver : SplitStream<WebSocket>, mut tx_out_py : UnboundedSender<InternMessage>, tx_out_b : UnboundedSender<InternMessage>) {
     loop {
-        rx.recv().await;
-        println!("Browser has something for me!");
+        if let Some(m) = receiver.next().await {
+            println!("Incoming message from python!")
+        }
     }
 }
+
+
+
 
 pub fn setup_python_ws(data : Arc<Mutex<Data>>, comms : Arc<Mutex<GlobalComms>>) ->  impl Filter<Extract = (impl Reply, ), Error = Rejection> + Clone {
     let data_filter = warp::any().map(move || data.clone());

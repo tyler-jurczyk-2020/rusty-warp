@@ -14,6 +14,7 @@ mod data;
 mod events;
 mod python;
 mod browser;
+mod shared;
 
 
 #[tokio::main]
