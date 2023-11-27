@@ -12,16 +12,15 @@ async fn handle_python_websocket(ws : warp::ws::WebSocket, data : Arc<Mutex<Data
     let (mut sender, mut receiver) = ws.split();
     // Receives data from browser throught this channel
     let (tx, mut rx) = mpsc::unbounded_channel::<InternMessage>();
+    // Browser comms
     let (tx_brow, mut rx_brow) = mpsc::unbounded_channel::<InternMessage>();
+    // Main thread comms
     let mut c = comms.lock().unwrap();
     c.send_to_py = Some(tx.clone());
     c.recv_from_py = Some(rx_brow);
     c.send_to_brow = Some(tx_brow.clone());
     let brow_cln = tx_brow.clone();
     let py_cln = tx.clone();
-    tokio::spawn(async move {
-        incoming_python_thread(receiver, py_cln, brow_cln).await;
-    });
 
     tokio::spawn(async move {
         outgoing_thread(sender, rx).await;
@@ -31,15 +30,16 @@ async fn handle_python_websocket(ws : warp::ws::WebSocket, data : Arc<Mutex<Data
     tokio::spawn(async move {
        main_thread(data, tx_brow, tx).await 
     });
+    tokio::spawn(async move {
+        incoming_python_thread(receiver, py_cln, brow_cln).await;
+    });
     
     // Check result of tokio spawns and disconnect properly
 }
 
 async fn incoming_python_thread(mut receiver : SplitStream<WebSocket>, mut tx_out_py : UnboundedSender<InternMessage>, tx_out_b : UnboundedSender<InternMessage>) {
-    loop {
-        if let Some(m) = receiver.next().await {
-            println!("Incoming message from python!")
-        }
+    while let Some(m) = receiver.next().await {
+        println!("Incoming message from python!")
     }
 }
 

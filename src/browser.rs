@@ -18,41 +18,39 @@ async fn handle_browser_websocket(ws : warp::ws::WebSocket, data : Arc<Mutex<Dat
     let tx = c.send_to_brow.clone().unwrap();
     let python_sender = c.send_to_py.clone().unwrap();
     let rx = c.recv_from_py.take().unwrap();
-    tokio::spawn(async move {
-        incoming_browser_thread(receiver, tx, python_sender, data_ref).await;
-    });
 
     // Channel to pass messages along to the browser
     tokio::spawn(async move {
         outgoing_thread(sender, rx).await;
     }); 
+    tokio::spawn(async move {
+        incoming_browser_thread(receiver, tx, python_sender, data_ref).await;
+    });
 }
 
 async fn incoming_browser_thread(mut receiver : SplitStream<WebSocket>, mut tx_out_b : UnboundedSender<InternMessage>, tx_out_py : UnboundedSender<InternMessage>, data : Arc<Mutex<Data>>) {
-    loop {
-        if let Some(m) = receiver.next().await {
-            println!("Incoming message on browser thread!");
-            if let Ok(msg) = m {
-                match msg.to_str().unwrap() {
-                    "GET_PAGE" => {
-                        println!("Recieved page code");
-                        let message_to_send;
-                        {
-                            let data_handle = data.lock().unwrap();
-                            let mut response : Vec<String> = Vec::new();
-                            for players in &data_handle.players {
-                                response.push(players.photo.clone()); 
-                            }
-                            message_to_send = InternMessage::new(serde_json::to_string(&response).unwrap());
+    while let Some(m) = receiver.next().await {
+        println!("Incoming message on browser thread!");
+        if let Ok(msg) = m {
+            match msg.to_str().unwrap() {
+                "GET_PAGE" => {
+                    println!("Recieved page code");
+                    let message_to_send;
+                    {
+                        let data_handle = data.lock().unwrap();
+                        let mut response : Vec<String> = Vec::new();
+                        for players in &data_handle.players {
+                            response.push(players.photo.clone()); 
                         }
-                        message_to_send.send_message(&mut tx_out_b).await;
+                        message_to_send = InternMessage::new(serde_json::to_string(&response).unwrap());
                     }
-                    _ => panic!("Unrecognized request code")
-                } 
+                    message_to_send.send_message(&mut tx_out_b).await;
+                }
+                _ => panic!("Unrecognized request code")
             } 
-        }
-    } 
-}
+        } 
+    }
+} 
 
 pub fn setup_browser_ws(data : Arc<Mutex<Data>>, comms : Arc<Mutex<GlobalComms>>) -> impl Filter<Extract = (impl Reply, ), Error = Rejection> + Clone {
     let data_filter = warp::any().map(move || data.clone());

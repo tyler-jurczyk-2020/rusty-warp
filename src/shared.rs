@@ -9,13 +9,11 @@ use crate::{data::{InternMessage, ExternMessage, Data, GENERATE}, events::run_ma
 
 // This file is for shared functions between browser and python
 pub async fn outgoing_thread(mut sender : SplitSink<WebSocket, Message>, mut rx_in_b : UnboundedReceiver<InternMessage>) {
-    loop {
-        if let Some(m) = rx_in_b.recv().await {
-            let incoming_msg : Vec<String> = serde_json::from_str(&m.msg).unwrap();
-            let outgoing_msg = ExternMessage::new("GET_PAGE".to_string(), incoming_msg);
-            outgoing_msg.send_message(&mut sender).await;
-        } 
-    }
+    while let Some(m) = rx_in_b.recv().await {
+        let incoming_msg : Vec<String> = serde_json::from_str(&m.msg).unwrap();
+        let outgoing_msg = ExternMessage::new("GET_PAGE".to_string(), incoming_msg);
+        outgoing_msg.send_message(&mut sender).await;
+    } 
 }
 
 pub async fn main_thread(data : Arc<Mutex<Data>>, tx_brow : UnboundedSender<InternMessage>, tx_py : UnboundedSender<InternMessage>) {
