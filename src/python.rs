@@ -17,9 +17,10 @@ async fn handle_python_websocket(ws : warp::ws::WebSocket, data : Arc<Mutex<Data
     c.send_to_py = Some(tx.clone());
     c.recv_from_py = Some(rx_brow);
     c.send_to_brow = Some(tx_brow.clone());
-    let cln = data.clone();
+    let brow_cln = tx_brow.clone();
+    let py_cln = tx.clone();
     tokio::spawn(async move {
-        incoming_python_thread(receiver, tx, tx_brow).await;
+        incoming_python_thread(receiver, py_cln, brow_cln).await;
     });
 
     tokio::spawn(async move {
@@ -28,7 +29,7 @@ async fn handle_python_websocket(ws : warp::ws::WebSocket, data : Arc<Mutex<Data
     
     println!("Creating Main Thread");
     tokio::spawn(async move {
-       //main_thread(data, sender, receiver).await 
+       main_thread(data, tx_brow, tx).await 
     });
     
     // Check result of tokio spawns and disconnect properly

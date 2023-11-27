@@ -26,12 +26,6 @@ async fn handle_browser_websocket(ws : warp::ws::WebSocket, data : Arc<Mutex<Dat
     tokio::spawn(async move {
         outgoing_thread(sender, rx).await;
     }); 
-
-    // Signal that a browser has connected 
-    tokio::spawn(async move {
-        
-
-    });
 }
 
 async fn incoming_browser_thread(mut receiver : SplitStream<WebSocket>, mut tx_out_b : UnboundedSender<InternMessage>, tx_out_py : UnboundedSender<InternMessage>, data : Arc<Mutex<Data>>) {
