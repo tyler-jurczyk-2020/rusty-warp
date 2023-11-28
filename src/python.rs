@@ -3,7 +3,7 @@ use futures::{StreamExt, SinkExt, stream::{SplitSink, SplitStream}, Future};
 use tokio::sync::{watch::{Receiver, self, Sender}, mpsc::{self, UnboundedReceiver, UnboundedSender}};
 use warp::{filters::ws::{Message, WebSocket}, Filter, reject::Rejection, reply::Reply};
 
-use crate::{data::{GlobalComms, Data, ExternMessage, GENERATE, InternMessage}, events::run_match, shared::{outgoing_thread, main_thread}};
+use crate::{data::{GENERATE, messaging::{InternMessage, ExternMessage, GlobalComms}, gamedata::Data}, events::run_match, shared::{outgoing_thread, main_thread}};
 
 
 
@@ -15,10 +15,12 @@ async fn handle_python_websocket(ws : warp::ws::WebSocket, data : Arc<Mutex<Data
     // Browser comms
     let (tx_brow, mut rx_brow) = mpsc::unbounded_channel::<InternMessage>();
     // Main thread comms
+    let (tx_mt, rx_mt) = mpsc::unbounded_channel::<InternMessage>();
     let mut c = comms.lock().unwrap();
     c.send_to_py = Some(tx.clone());
     c.recv_from_py = Some(rx_brow);
     c.send_to_brow = Some(tx_brow.clone());
+    c.send_to_main = Some(tx_mt.clone());
     let brow_cln = tx_brow.clone();
     let py_cln = tx.clone();
 
@@ -28,18 +30,25 @@ async fn handle_python_websocket(ws : warp::ws::WebSocket, data : Arc<Mutex<Data
     
     println!("Creating Main Thread");
     tokio::spawn(async move {
-       main_thread(data, tx_brow, tx).await 
+       main_thread(data, tx_brow, tx, rx_mt).await 
     });
     tokio::spawn(async move {
-        incoming_python_thread(receiver, py_cln, brow_cln).await;
+        incoming_python_thread(receiver, py_cln, brow_cln, tx_mt).await;
     });
     
     // Check result of tokio spawns and disconnect properly
 }
 
-async fn incoming_python_thread(mut receiver : SplitStream<WebSocket>, mut tx_out_py : UnboundedSender<InternMessage>, tx_out_b : UnboundedSender<InternMessage>) {
+async fn incoming_python_thread(mut receiver : SplitStream<WebSocket>, mut tx_out_py : UnboundedSender<InternMessage>, tx_out_b : UnboundedSender<InternMessage>, mut tx_mt : UnboundedSender<InternMessage>) {
     while let Some(m) = receiver.next().await {
-        println!("Incoming message from python!")
+        let received_msg : ExternMessage = serde_json::from_str(m.as_ref().unwrap().to_str().unwrap()).unwrap(); 
+        match received_msg.preflight.as_str() {
+        "GEN_PLAYERS" => {
+            let intern_msg : InternMessage = received_msg.into();
+            intern_msg.send_message(&mut tx_mt).await;
+        }
+        _ => panic!("Unrecognized command")
+        } 
     }
 }
 

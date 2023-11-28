@@ -6,7 +6,7 @@ use warp::hyper::body::Bytes;
 use tokio::{sync::{mpsc::{self, UnboundedSender, UnboundedReceiver}, watch::{self, Sender, Receiver}}, stream};
 use serde::{Serialize, Deserialize};
 
-use crate::{data::{Data, InternMessage, GlobalComms, ExternMessage}, shared::outgoing_thread};
+use crate::{data::messaging::{InternMessage, GlobalComms}, data::gamedata::Data, shared::outgoing_thread};
 
 
 async fn handle_browser_websocket(ws : warp::ws::WebSocket, data : Arc<Mutex<Data>>, comms : Arc<Mutex<GlobalComms>>) {
@@ -42,7 +42,7 @@ async fn incoming_browser_thread(mut receiver : SplitStream<WebSocket>, mut tx_o
                         for players in &data_handle.players {
                             response.push(players.photo.clone()); 
                         }
-                        message_to_send = InternMessage::new(serde_json::to_string(&response).unwrap());
+                        message_to_send = InternMessage::new(Some("GET_PAGE".to_string()), Some(serde_json::to_string(&response).unwrap()));
                     }
                     message_to_send.send_message(&mut tx_out_b).await;
                 }

@@ -2,7 +2,8 @@ use std::{time::Duration, sync::{Mutex, Arc}};
 
 use tokio::sync::watch::Sender;
 
-use crate::{data::Batch, Data};
+use crate::data::gamedata::Data;
+
 
 pub async fn run_match( sender : &Sender<usize>, data : Arc<Mutex<Data>>) {
     let size;
