@@ -5,7 +5,7 @@ use futures::stream::{SplitSink, SplitStream};
 use tokio::{sync::mpsc::{UnboundedReceiver, UnboundedSender}, fs::File, io::{AsyncReadExt, AsyncWriteExt}};
 use warp::filters::ws::{WebSocket, Message};
 
-use crate::{data::{GENERATE, Settings, messaging::{InternMessage, ExternMessage}, gamedata::{Data, Player}}, events::run_match};
+use crate::{data::{GENERATE, Settings, messaging::{InternMessage, ExternMessage}, gamedata::{Data, Player, Team}}, events::run_match};
 
 // This file is for shared functions between browser and python
 pub async fn outgoing_thread(mut sender : SplitSink<WebSocket, Message>, mut rx_in_b : UnboundedReceiver<InternMessage>) {
@@ -32,12 +32,13 @@ pub async fn main_thread(data : Arc<Mutex<Data>>, tx_brow : UnboundedSender<Inte
                 settings
             }
         };
+        let mut player_map : HashMap<String, Player>;
         if settings.gen_players {
             let msg = InternMessage::new(Some("GEN_PLAYERS".to_string()), None); 
             msg.send_message(&mut tx_py).await;
             let d = rx.recv().await.unwrap();
             let players_pool : Vec<Player> = serde_json::from_str(d.msg.unwrap().as_str()).unwrap();  
-            let player_map : HashMap<String, Player> = players_pool.into_iter().map(|p| (p.name.clone(), p)).collect();
+            player_map = players_pool.into_iter().map(|p| (p.name.clone(), p)).collect();
             println!("Mapped: {player_map:?}");
             println!("Players created");
             // Always overwrite player data if gen_players option is set
@@ -47,10 +48,41 @@ pub async fn main_thread(data : Arc<Mutex<Data>>, tx_brow : UnboundedSender<Inte
         }
         else {
             // Need to load the generated player data
+            player_map = HashMap::new();
+            println!("Need to load player data...");
         }
 
-        if !settings.draft {
-            println!("Starting the draft") 
+        if settings.draft {
+            // May want to separate out team creation
+            let t1 = Team::new();
+            let t2 = Team::new();
+            let mut teams = vec![t1, t2];
+            let mut next_up = 0;
+            // Start actual draft
+            println!("Starting the draft"); 
+            let draft_map : HashMap<String, f64> = player_map.clone().into_iter().map(|h| (h.0, h.1.draftability)).collect();
+            let start = InternMessage::new(Some("DRAFT".to_string()), Some(serde_json::to_string(&draft_map).unwrap()));
+            start.send_message(&mut tx_py).await;
+            if let Some(m) = rx.recv().await {
+                if m.code.unwrap().eq("DRAFT_OK") {
+                    println!("Ready to start drafting");
+                    for _ in 0..draft_map.len() {
+                        let get_next = InternMessage::new(Some("DRAFT".to_string()), None);  
+                        get_next.send_message(&mut tx_py).await;
+                        if let Some(m) = rx.recv().await {
+                            if let Some(c) = m.msg {
+                                let name : String = serde_json::from_str(&c).unwrap();
+                                let player = player_map.get(&name).cloned().unwrap();
+                                teams[next_up].members.push(player);
+                                next_up = (next_up+1)%2;
+                            }
+                        }
+                    }
+                    println!("Teams: {teams:?}");
+                    let end_draft = InternMessage::new(Some("DRAFT_OVER".to_string()), None);
+                    end_draft.send_message(&mut tx_py).await;
+                }
+            }
         }
 
         let data_handle = data.clone();

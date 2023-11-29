@@ -3,22 +3,34 @@ use std::collections::HashMap;
 use serde::{Serialize, Deserialize};
 
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Player {
     pub name : String,
     mean : f64,
     std_dev : f64,
-    pub photo : String 
+    pub photo : String, 
+    pub draftability : f64
 }
 
 impl Player {
-    fn new(name : String, mean : f64, std_dev : f64, photo : String) -> Player {
-        Player { name, mean, std_dev, photo}
+    fn new(name : String, mean : f64, std_dev : f64, photo : String, draftability : f64) -> Player {
+        Player { name, mean, std_dev, photo, draftability}
     }
 }
 
 pub struct Pool {
     pool : Vec<Player>    
+}
+
+#[derive(Debug)]
+pub struct Team {
+    pub members : Vec<Player>
+}
+
+impl Team {
+    pub fn new() -> Team {
+        Team { members: Vec::new() }
+    }
 }
 
 
@@ -41,7 +53,7 @@ impl Data {
             batch_size : 40,
             display1 : 0.0,
             display2 : 0.0,
-            players : vec![Player::new("none1".to_string(), 0.2, 0.1, "a4.png".to_string()), Player::new("none2,".to_string(), 0.1, 0.1, "a2.png".to_string())]
+            players : vec![Player::new("none1".to_string(), 0.2, 0.1, "a4.png".to_string(), 0.0), Player::new("none2,".to_string(), 0.1, 0.1, "a2.png".to_string(), 0.0)]
         }
     }
 }

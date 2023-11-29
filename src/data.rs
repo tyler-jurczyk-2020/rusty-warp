@@ -13,7 +13,7 @@ pub struct Settings {
 
 impl Settings {
     pub fn new() -> Settings {
-        Settings { draft: false, gen_players : true }
+        Settings { draft: true, gen_players : true }
     } 
 }
 

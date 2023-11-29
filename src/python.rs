@@ -41,9 +41,13 @@ async fn handle_python_websocket(ws : warp::ws::WebSocket, data : Arc<Mutex<Data
 
 async fn incoming_python_thread(mut receiver : SplitStream<WebSocket>, mut tx_out_py : UnboundedSender<InternMessage>, tx_out_b : UnboundedSender<InternMessage>, mut tx_mt : UnboundedSender<InternMessage>) {
     while let Some(m) = receiver.next().await {
-        let received_msg : ExternMessage = serde_json::from_str(m.as_ref().unwrap().to_str().unwrap()).unwrap(); 
+        println!("Receiving message : {m:?}");
+        let received_msg : ExternMessage = match serde_json::from_str(m.as_ref().unwrap().to_str().unwrap()) {
+            Ok(v) => v,
+            Err(e) => panic!("Unable to deserialize: {e}")
+        };
         match received_msg.preflight.as_str() {
-        "GEN_PLAYERS" => {
+        "GEN_PLAYERS" | "DRAFT_OK" => {
             let intern_msg : InternMessage = received_msg.into();
             intern_msg.send_message(&mut tx_mt).await;
         }
