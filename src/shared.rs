@@ -5,7 +5,7 @@ use futures::stream::{SplitSink, SplitStream};
 use tokio::{sync::mpsc::{UnboundedReceiver, UnboundedSender}, fs::File, io::{AsyncReadExt, AsyncWriteExt}};
 use warp::filters::ws::{WebSocket, Message};
 
-use crate::{data::{GENERATE, Settings, messaging::{InternMessage, ExternMessage}, gamedata::{Data, Player, Team}}, events::run_match};
+use crate::{data::{GENERATE, Settings, messaging::{InternMessage, ExternMessage}, gamedata::{Data, Player, Team, State}, SharedData}, events::run_match};
 
 // This file is for shared functions between browser and python
 pub async fn outgoing_thread(mut sender : SplitSink<WebSocket, Message>, mut rx_in_b : UnboundedReceiver<InternMessage>) {
@@ -15,7 +15,7 @@ pub async fn outgoing_thread(mut sender : SplitSink<WebSocket, Message>, mut rx_
     } 
 }
 
-pub async fn main_thread(data : Arc<Mutex<Data>>, tx_brow : UnboundedSender<InternMessage>, mut tx_py : UnboundedSender<InternMessage>, mut rx : UnboundedReceiver<InternMessage>) {
+pub async fn main_thread(shared_data : Arc<SharedData>, tx_brow : UnboundedSender<InternMessage>, mut tx_py : UnboundedSender<InternMessage>, mut rx : UnboundedReceiver<InternMessage>) {
 
         //NEED TO REWRITE MAIN THREAD!!!
         let settings = match File::open("./saved/settings.txt").await {
@@ -51,8 +51,16 @@ pub async fn main_thread(data : Arc<Mutex<Data>>, tx_brow : UnboundedSender<Inte
             player_map = HashMap::new();
             println!("Need to load player data...");
         }
-
+        // NEED TO REORG
+        {
+            let mut d = shared_data.game.lock().unwrap();
+            //d.player_pool = player_map;
+        }
         if settings.draft {
+            {
+                let mut d = shared_data.game.lock().unwrap();
+                d.state = State::Draft;
+            } 
             // May want to separate out team creation
             let t1 = Team::new();
             let t2 = Team::new();
@@ -78,14 +86,13 @@ pub async fn main_thread(data : Arc<Mutex<Data>>, tx_brow : UnboundedSender<Inte
                             }
                         }
                     }
-                    println!("Teams: {teams:?}");
                     let end_draft = InternMessage::new(Some("DRAFT_OVER".to_string()), None);
                     end_draft.send_message(&mut tx_py).await;
                 }
             }
         }
 
-        let data_handle = data.clone();
+        let data_handle = shared_data.game.clone();
         let request_data;
         {
             let data_hold = data_handle.lock().unwrap();

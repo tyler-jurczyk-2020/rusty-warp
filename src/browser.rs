@@ -6,61 +6,62 @@ use warp::hyper::body::Bytes;
 use tokio::{sync::{mpsc::{self, UnboundedSender, UnboundedReceiver}, watch::{self, Sender, Receiver}}, stream};
 use serde::{Serialize, Deserialize};
 
-use crate::{data::messaging::{InternMessage, GlobalComms}, data::gamedata::Data, shared::outgoing_thread};
+use crate::{data::{messaging::{InternMessage}}, data::{browser_comms::{BrowserData}, SharedData}, shared::outgoing_thread};
 
 
-async fn handle_browser_websocket(ws : warp::ws::WebSocket, data : Arc<Mutex<Data>>, comms : Arc<Mutex<GlobalComms>>) {
+async fn handle_browser_websocket(ws : warp::ws::WebSocket, shared_data : Arc<SharedData>) {
     let (sender, receiver) = ws.split();
 
     // Channel to recieve browser messages and pass them along
-    let data_ref = data.clone();
-    let mut c = comms.lock().unwrap();
+    println!("Setting up browser comms");
+    let browser_data = shared_data.browser.clone();
+    let mut c = shared_data.comms.lock().unwrap();
     let tx = c.send_to_brow.clone().unwrap();
     let python_sender = c.send_to_py.clone().unwrap();
     let rx = c.recv_from_py.take().unwrap();
+    println!("{rx:?}");
 
     // Channel to pass messages along to the browser
     tokio::spawn(async move {
         outgoing_thread(sender, rx).await;
     }); 
     tokio::spawn(async move {
-        incoming_browser_thread(receiver, tx, python_sender, data_ref).await;
+        incoming_browser_thread(receiver, tx, python_sender, browser_data).await;
     });
 }
 
-async fn incoming_browser_thread(mut receiver : SplitStream<WebSocket>, mut tx_out_b : UnboundedSender<InternMessage>, tx_out_py : UnboundedSender<InternMessage>, data : Arc<Mutex<Data>>) {
+async fn incoming_browser_thread(mut receiver : SplitStream<WebSocket>, mut tx_out_b : UnboundedSender<InternMessage>, tx_out_py : UnboundedSender<InternMessage>, browser_data : Arc<Mutex<BrowserData>>) {
     while let Some(m) = receiver.next().await {
-        println!("Incoming message on browser thread!");
+        println!("Received browser message: {m:?}");
         if let Ok(msg) = m {
+            // NEED TO HANDLE CASE WHEN msg IS AN ERROR!!
             match msg.to_str().unwrap() {
                 "GET_PAGE" => {
                     println!("Recieved page code");
-                    let message_to_send;
+                    //let message_to_send;
                     {
-                        let data_handle = data.lock().unwrap();
-                        let mut response : Vec<String> = Vec::new();
-                        for players in &data_handle.players {
-                            response.push(players.photo.clone()); 
-                        }
-                        message_to_send = InternMessage::new(Some("GET_PAGE".to_string()), Some(serde_json::to_string(&response).unwrap()));
+                        //let d  = data.lock().unwrap();
+                        //match d.state {
+                        //    Draft => PageType::DraftIP(DraftResp) 
+                        //}
+                        //message_to_send = InternMessage::new(Some("GET_PAGE".to_string()), Some(serde_json::to_string(&response).unwrap()));
                     }
-                    message_to_send.send_message(&mut tx_out_b).await;
+                    //message_to_send.send_message(&mut tx_out_b).await;
                 }
                 _ => panic!("Unrecognized request code")
             } 
         } 
     }
+    println!("We escaped while loop!");
 } 
 
-pub fn setup_browser_ws(data : Arc<Mutex<Data>>, comms : Arc<Mutex<GlobalComms>>) -> impl Filter<Extract = (impl Reply, ), Error = Rejection> + Clone {
-    let data_filter = warp::any().map(move || data.clone());
-    let comms_filter = warp::any().map(move || comms.clone());
+pub fn setup_browser_ws(shared_data : Arc<SharedData>) -> impl Filter<Extract = (impl Reply, ), Error = Rejection> + Clone {
+    let data_filter = warp::any().map(move || shared_data.clone());
     let filter = warp::path!("browser-ws")
         .and(warp::ws())
         .and(data_filter)
-        .and(comms_filter)
-        .map(|ws : warp::ws::Ws, d, c| {
-            ws.on_upgrade(move |ws| handle_browser_websocket(ws, d, c))
+        .map(|ws : warp::ws::Ws, d| {
+            ws.on_upgrade(move |ws| handle_browser_websocket(ws, d))
         });
     filter
 }

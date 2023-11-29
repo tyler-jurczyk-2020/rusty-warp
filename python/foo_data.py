@@ -37,6 +37,10 @@ def generate_players(ws):
                 "photo" : randomPhotos[i],
                 "draftability" : draft_rating
             })
+    players.sort(key=lambda x:x["draftability"])
+    for i in range(20):
+        players[i]["pick"] = i+1 
+    print(players)
     send_back = {"preflight": "GEN_PLAYERS", "contents": json.dumps(players)}
     ws.send(json.dumps(send_back))
 

@@ -2,8 +2,11 @@ import { useEffect, useState } from 'react'
 import './App.css'
 
 function App() {
+    console.log("Rendering App...")
     const [portrait, setPortrait] = useState('players/no_portrait.png');
-    setup_websocket(setPortrait);
+    useEffect(() => {
+        setup_websocket(setPortrait);
+    }, []);
     return (
     <div> 
         <img src={portrait}/>

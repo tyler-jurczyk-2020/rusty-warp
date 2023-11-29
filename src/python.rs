@@ -3,12 +3,12 @@ use futures::{StreamExt, SinkExt, stream::{SplitSink, SplitStream}, Future};
 use tokio::sync::{watch::{Receiver, self, Sender}, mpsc::{self, UnboundedReceiver, UnboundedSender}};
 use warp::{filters::ws::{Message, WebSocket}, Filter, reject::Rejection, reply::Reply};
 
-use crate::{data::{GENERATE, messaging::{InternMessage, ExternMessage, GlobalComms}, gamedata::Data}, events::run_match, shared::{outgoing_thread, main_thread}};
+use crate::{data::{GENERATE, messaging::{InternMessage, ExternMessage, GlobalComms}, gamedata::Data, SharedData}, events::run_match, shared::{outgoing_thread, main_thread}};
 
 
 
 
-async fn handle_python_websocket(ws : warp::ws::WebSocket, data : Arc<Mutex<Data>>, comms : Arc<Mutex<GlobalComms>>) {
+async fn handle_python_websocket(ws : warp::ws::WebSocket, shared_data : Arc<SharedData>) {
     let (mut sender, mut receiver) = ws.split();
     // Receives data from browser throught this channel
     let (tx, mut rx) = mpsc::unbounded_channel::<InternMessage>();
@@ -16,7 +16,7 @@ async fn handle_python_websocket(ws : warp::ws::WebSocket, data : Arc<Mutex<Data
     let (tx_brow, mut rx_brow) = mpsc::unbounded_channel::<InternMessage>();
     // Main thread comms
     let (tx_mt, rx_mt) = mpsc::unbounded_channel::<InternMessage>();
-    let mut c = comms.lock().unwrap();
+    let mut c = shared_data.comms.lock().unwrap();
     c.send_to_py = Some(tx.clone());
     c.recv_from_py = Some(rx_brow);
     c.send_to_brow = Some(tx_brow.clone());
@@ -29,8 +29,9 @@ async fn handle_python_websocket(ws : warp::ws::WebSocket, data : Arc<Mutex<Data
     }); 
     
     println!("Creating Main Thread");
+    let borrow_shared = shared_data.clone();
     tokio::spawn(async move {
-       main_thread(data, tx_brow, tx, rx_mt).await 
+       main_thread(borrow_shared, tx_brow, tx, rx_mt).await 
     });
     tokio::spawn(async move {
         incoming_python_thread(receiver, py_cln, brow_cln, tx_mt).await;
@@ -59,15 +60,14 @@ async fn incoming_python_thread(mut receiver : SplitStream<WebSocket>, mut tx_ou
 
 
 
-pub fn setup_python_ws(data : Arc<Mutex<Data>>, comms : Arc<Mutex<GlobalComms>>) ->  impl Filter<Extract = (impl Reply, ), Error = Rejection> + Clone {
-    let data_filter = warp::any().map(move || data.clone());
-    let comms_filter = warp::any().map(move || comms.clone());
+pub fn setup_python_ws(shared_data : Arc<SharedData>) ->  impl Filter<Extract = (impl Reply, ), Error = Rejection> + Clone {
+    let borrow_shared = shared_data.clone();
+    let data_filter = warp::any().map(move || shared_data.clone());
     let filter = warp::path!("python-ws")
         .and(warp::ws())
         .and(data_filter)
-        .and(comms_filter)
-        .map(|ws : warp::ws::Ws, d, c| {
-            ws.on_upgrade(move |ws| handle_python_websocket(ws, d, c))
+        .map(|ws : warp::ws::Ws, d| {
+            ws.on_upgrade(move |ws| handle_python_websocket(ws, d))
         });
     filter
 }

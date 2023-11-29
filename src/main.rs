@@ -1,6 +1,6 @@
 use std::{net::SocketAddr, path::PathBuf, sync::{Arc, Mutex}};
 use browser::setup_browser_ws;
-use data::{gamedata::Data, messaging::GlobalComms};
+use data::{gamedata::Data, messaging::GlobalComms, SharedData};
 use python::setup_python_ws;
 use warp::Filter;
 
@@ -17,10 +17,9 @@ async fn main() {
     let socket : SocketAddr = "127.0.0.1:7878".parse().unwrap();
     
     // Shared data
-    let data : Arc<Mutex<Data>> = Arc::new(Mutex::new(Data::new()));
-    let comms : Arc<Mutex<GlobalComms>> = Arc::new(Mutex::new(GlobalComms::new()));
-    let python_filter = setup_python_ws(data.clone(), comms.clone());
-    let browser_filter = setup_browser_ws(data, comms.clone());
+    let data : Arc<SharedData> = Arc::new(SharedData::new());
+    let python_filter = setup_python_ws(data.clone());
+    let browser_filter = setup_browser_ws(data);
     let mut fs_path = PathBuf::new(); 
     fs_path.push(std::env::current_dir().unwrap().to_string_lossy().to_string());
     fs_path.push("ui_prod");
